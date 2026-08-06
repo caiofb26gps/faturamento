@@ -16,8 +16,12 @@ import {
 import { useForm } from '@mantine/form'
 import { notifications } from '@mantine/notifications'
 import { api } from '../api/client'
-import type { Cliente, RegraSegmentacao, RegraSegmentacaoInput } from '../api/types'
+import type { Cliente, MapaGerado, RegraSegmentacao, RegraSegmentacaoInput } from '../api/types'
 import { useAuth } from '../auth/AuthContext'
+
+function corStatusMapa(status: MapaGerado['status']) {
+  return { RASCUNHO: 'yellow', PRONTO: 'blue', REVISADO: 'teal', ENVIADO: 'green' }[status]
+}
 
 const REGRA_VAZIA: RegraSegmentacaoInput = {
   valor_segmentacao: '',
@@ -35,17 +39,49 @@ export function ClienteDetailPage() {
   const { usuario } = useAuth()
   const [cliente, setCliente] = useState<Cliente | null>(null)
   const [regras, setRegras] = useState<RegraSegmentacao[]>([])
+  const [mapas, setMapas] = useState<MapaGerado[]>([])
   const [modalAberto, setModalAberto] = useState(false)
+  const [competencia, setCompetencia] = useState('')
+  const [gerando, setGerando] = useState(false)
 
   const form = useForm<RegraSegmentacaoInput>({ initialValues: REGRA_VAZIA })
 
   async function carregar() {
-    const [{ data: c }, { data: r }] = await Promise.all([
+    const [{ data: c }, { data: r }, { data: m }] = await Promise.all([
       api.get<Cliente>(`/clientes/${clienteId}`),
       api.get<RegraSegmentacao[]>(`/clientes/${clienteId}/regras`),
+      api.get<MapaGerado[]>(`/clientes/${clienteId}/mapas`),
     ])
     setCliente(c)
     setRegras(r)
+    setMapas(m)
+  }
+
+  async function gerarMapas() {
+    if (!competencia) {
+      notifications.show({ message: 'Informe a competência (formato AAAAMM, ex: 202607)', color: 'red' })
+      return
+    }
+    setGerando(true)
+    try {
+      await api.post(`/clientes/${clienteId}/mapas/gerar`, null, { params: { competencia } })
+      notifications.show({ message: 'Mapa(s) gerado(s).', color: 'green' })
+      carregar()
+    } catch (err: any) {
+      notifications.show({ message: err?.response?.data?.detail ?? 'Erro ao gerar mapa', color: 'red' })
+    } finally {
+      setGerando(false)
+    }
+  }
+
+  async function baixarMapa(mapa: MapaGerado) {
+    const { data } = await api.get(`/mapas/${mapa.id}/arquivo`, { responseType: 'blob' })
+    const url = URL.createObjectURL(data)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `mapa_${mapa.competencia}_cliente${mapa.cliente_id}_${mapa.id}.xlsx`
+    link.click()
+    URL.revokeObjectURL(url)
   }
 
   useEffect(() => {
@@ -137,6 +173,60 @@ export function ClienteDetailPage() {
       {regras.length === 0 && (
         <Text c="dimmed" size="sm">
           Este cliente usa segmentação GERAL — sem regras específicas.
+        </Text>
+      )}
+
+      <Group justify="space-between" mt="md">
+        <Title order={4}>Mapas de faturamento</Title>
+        <Group>
+          <TextInput
+            placeholder="Competência (AAAAMM)"
+            value={competencia}
+            onChange={(e) => setCompetencia(e.currentTarget.value)}
+            w={160}
+          />
+          <Button size="xs" loading={gerando} onClick={gerarMapas}>
+            Gerar mapa
+          </Button>
+        </Group>
+      </Group>
+
+      <Table striped withTableBorder>
+        <Table.Thead>
+          <Table.Tr>
+            <Table.Th>Competência</Table.Th>
+            <Table.Th>Status</Table.Th>
+            <Table.Th>Total</Table.Th>
+            <Table.Th>Alertas</Table.Th>
+            <Table.Th />
+          </Table.Tr>
+        </Table.Thead>
+        <Table.Tbody>
+          {mapas.map((m) => (
+            <Table.Tr key={m.id}>
+              <Table.Td>{m.competencia}</Table.Td>
+              <Table.Td>
+                <Badge color={corStatusMapa(m.status)}>{m.status}</Badge>
+              </Table.Td>
+              <Table.Td>{m.valores_iniciais?.Total ?? '—'}</Table.Td>
+              <Table.Td>
+                {m.alertas?.fora_das_regras && <Badge color="red" mr={4}>fora das regras</Badge>}
+                {m.alertas?.verbas_fora_de_para?.length ? (
+                  <Badge color="orange">{m.alertas.verbas_fora_de_para.length} verba(s) fora do De/Para</Badge>
+                ) : null}
+              </Table.Td>
+              <Table.Td>
+                <Button size="xs" variant="light" onClick={() => baixarMapa(m)}>
+                  Baixar .xlsx
+                </Button>
+              </Table.Td>
+            </Table.Tr>
+          ))}
+        </Table.Tbody>
+      </Table>
+      {mapas.length === 0 && (
+        <Text c="dimmed" size="sm">
+          Nenhum mapa gerado ainda para este cliente.
         </Text>
       )}
 

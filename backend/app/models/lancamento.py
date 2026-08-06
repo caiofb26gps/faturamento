@@ -38,7 +38,14 @@ class LancamentoVerba(Base, TimestampMixin):
 
     verba_codigo: Mapped[str] = mapped_column(String(20), index=True)
     descri: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    valor: Mapped[float] = mapped_column(Numeric(14, 2))
+    valor: Mapped[float] = mapped_column(Numeric(14, 2))  # coluna TOTAL da DS
+    # Coberto separadamente porque o mapa final soma Encargos/FEE/Impostos como
+    # linhas próprias (ver docs/plano.md) — não são verbas normais casadas por
+    # de/para, são colunas específicas da DS somadas direto.
+    reembolso: Mapped[float] = mapped_column(Numeric(14, 2), default=0)
+    tributos: Mapped[float] = mapped_column(Numeric(14, 2), default=0)
+    taxa: Mapped[float] = mapped_column(Numeric(14, 2), default=0)
+    encargos: Mapped[float] = mapped_column(Numeric(14, 2), default=0)
     origem: Mapped[str | None] = mapped_column(String(20), nullable=True)  # IMPORT / CLOSED / SRC etc.
 
     cliente_id: Mapped[int | None] = mapped_column(ForeignKey("clientes.id"), nullable=True, index=True)

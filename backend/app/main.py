@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api import atributos, auth, clientes, de_para, importacoes, regras, usuarios
+from app.api import atributos, auth, clientes, de_para, importacoes, mapas, regras, usuarios
 
 app = FastAPI(title="Mapa de Faturamento", version="0.1.0")
 
@@ -20,6 +20,7 @@ app.include_router(regras.router)
 app.include_router(de_para.router)
 app.include_router(atributos.router)
 app.include_router(importacoes.router)
+app.include_router(mapas.router)
 
 
 @app.get("/health")

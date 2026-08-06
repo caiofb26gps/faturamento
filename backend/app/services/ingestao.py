@@ -132,6 +132,10 @@ def processar_importacao(db: Session, importacao_id: int) -> ResumoImportacao:
                     "verba_codigo": linha["verba_codigo"],
                     "descri": linha["descri"],
                     "valor": linha["valor"],
+                    "reembolso": linha["reembolso"],
+                    "tributos": linha["tributos"],
+                    "taxa": linha["taxa"],
+                    "encargos": linha["encargos"],
                     "origem": linha["origem"],
                     "cliente_id": cliente_resolvido_id,
                 }

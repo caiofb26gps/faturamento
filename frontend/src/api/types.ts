@@ -73,3 +73,17 @@ export interface AtributoSegmentacao {
   codigo: string
   descricao: string | null
 }
+
+export type StatusMapaGerado = 'RASCUNHO' | 'PRONTO' | 'REVISADO' | 'ENVIADO'
+
+export interface MapaGerado {
+  id: number
+  cliente_id: number
+  regra_segmentacao_id: number | null
+  competencia: string
+  status: StatusMapaGerado
+  valores_iniciais: Record<string, string> | null
+  valores_finais: Record<string, string> | null
+  diferenca: Record<string, string> | null
+  alertas: { fora_das_regras: boolean; verbas_fora_de_para: string[] } | null
+}
