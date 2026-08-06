@@ -6,6 +6,7 @@ from app.models.envio import Envio
 from app.models.importacao import Importacao
 from app.models.lancamento import LancamentoVerba
 from app.models.mapa import MapaGerado
+from app.models.negocio_mapeamento import NegocioDsMapeamento
 from app.models.regra import RegraSegmentacao
 from app.models.usuario import Usuario
 
@@ -21,6 +22,7 @@ __all__ = [
     "Importacao",
     "LancamentoVerba",
     "MapaGerado",
+    "NegocioDsMapeamento",
     "RegraSegmentacao",
     "Usuario",
 ]

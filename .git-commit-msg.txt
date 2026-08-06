@@ -1,0 +1,26 @@
+Pipeline de ingestão da DS + frontend inicial (Fase 2 + scaffold web)
+
+Implementa o núcleo da Fase 2 do plano: parser da base DS (~166k linhas),
+resolução de cliente por NEGOCIO+COD GRUPO (chave validada empiricamente contra
+dados reais — CNPJ não serve como chave porque um cliente pode ter dezenas
+deles), upload assíncrono via BackgroundTasks com polling de status, e o script
+de bootstrap que casa automaticamente clientes já cadastrados com seus COD
+GRUPO na DS.
+
+Adiciona `negocio_ds_mapeamento`: descobri, comparando a DS real com a aba
+MAPAS, que o campo NEGOCIO da DS ("FIELD MARKETING", "CLT" etc.) não é o mesmo
+texto do Negocio do cadastro (TALENTOS/TRADE) — existe um de/para oculto entre
+eles, agora modelado como configuração editável em vez de constante fixa.
+
+Rodando a ingestão real ponta a ponta: 86,1% das linhas resolvidas
+automaticamente para um cliente cadastrado. Os 13,9% restantes não são erro do
+pipeline — são achados de dados reais: nomes ambíguos (ex: "3M" na DS não
+distingue as 3 unidades de negócio TRADE cadastradas separadamente) e clientes
+que faturam hoje sem nenhum cadastro correspondente (JBS, Shopee, Três
+Corações, Barry Callebaut e outros, ~11 mil linhas).
+
+Também sobe o scaffold do frontend (React + TypeScript + Vite + Mantine):
+login, listagem/cadastro de clientes, regras de segmentação por cliente e
+consulta do De/Para geral, todo autenticado via JWT contra a API.
+
+Co-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>

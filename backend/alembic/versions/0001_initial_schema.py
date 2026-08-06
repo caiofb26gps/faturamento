@@ -1,11 +1,18 @@
 """schema inicial
 
-Cria as 13 tabelas do plano (cadastro + operacional). Como não há um Postgres
-disponível neste ambiente de desenvolvimento para gerar a migration via
-autogenerate, o schema é criado diretamente a partir do metadata dos modelos
-SQLAlchemy (`app.models`) — garante que a migration corresponda exatamente aos
-modelos. Migrations futuras devem usar `alembic revision --autogenerate` normalmente
-contra um Postgres real.
+Cria todas as tabelas do sistema a partir do metadata dos modelos SQLAlchemy
+(`app.models`). Não há Postgres disponível neste ambiente de desenvolvimento para
+gerar a migration via autogenerate, então o schema é criado diretamente do
+metadata — garante que a migration corresponda exatamente aos modelos.
+
+Isso só é seguro porque este projeto nunca foi implantado em um Postgres real
+(nenhum dado de produção existe) — é a única migration até agora, então
+"refletir todo o metadata atual" é equivalente a "refletir o schema desta
+versão". A PARTIR DE QUANDO HOUVER UMA SEGUNDA MIGRATION (0002+), este padrão
+NÃO pode se repetir: mudanças futuras devem usar `alembic revision --autogenerate`
+contra um Postgres real, ou `op.create_table`/`op.add_column` explícitos —
+nunca `Base.metadata.create_all()` de novo, senão a migration mais nova volta a
+"vazar" para dentro desta.
 
 Revision ID: 0001
 Revises:

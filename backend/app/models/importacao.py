@@ -4,6 +4,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.core.database import Base
 from app.models.enums import StatusImportacao, TipoImportacao
 from app.models.mixins import TimestampMixin
+from app.models.types import JSONVariant
 
 
 class Importacao(Base, TimestampMixin):
@@ -26,5 +27,8 @@ class Importacao(Base, TimestampMixin):
         Enum(StatusImportacao, name="status_importacao"), default=StatusImportacao.PROCESSANDO
     )
     mensagem_erro: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # {total_linhas, linhas_resolvidas, linhas_nao_resolvidas, principais_nao_resolvidos}
+    # preenchido quando o processamento em background termina (ver app/services/ingestao.py)
+    resumo: Mapped[dict | None] = mapped_column(JSONVariant, nullable=True)
 
     lancamentos: Mapped[list["LancamentoVerba"]] = relationship(back_populates="importacao")
