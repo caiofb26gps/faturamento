@@ -37,8 +37,6 @@ r = client.post(
     json={
         "negocio": "TALENTOS",
         "nome": "3M",
-        "segmentacao_email": "COLABORADOR",
-        "segmentacao_mapa": "COLABORADOR",
         "portal_login": "03.528.670/0001-73",
         "portal_senha": "Tr@de2024",
     },
@@ -53,6 +51,7 @@ r = client.post(
     f"/clientes/{cliente['id']}/regras",
     headers=headers,
     json={
+        "atributo_segmentacao": "COLABORADOR",
         "valor_segmentacao": "MARIANGELA DA SILVA REIS PONCA",
         "nome_exibicao": "CAROLINA DINIZ",
         "email_responsavel": "cpdiniz2@mmm.com",
@@ -63,7 +62,7 @@ r = client.post(
 assert r.status_code == 201, r.text
 print("regra criada ok:", r.json())
 
-r = client.post("/de-para/modelos", headers=headers, json={"nome": "GERAL", "cliente_id": None})
+r = client.post("/de-para/modelos", headers=headers, json={"nome": "GERAL"})
 assert r.status_code == 201, r.text
 modelo = r.json()
 

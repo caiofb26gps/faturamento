@@ -23,7 +23,6 @@ class DeParaVerbaOut(DeParaVerbaBase):
 
 class DeParaModeloBase(BaseModel):
     nome: str
-    cliente_id: int | None = None
 
 
 class DeParaModeloCreate(DeParaModeloBase):
@@ -32,6 +31,8 @@ class DeParaModeloCreate(DeParaModeloBase):
 
 class DeParaModeloOut(DeParaModeloBase):
     id: int
+    total_itens: int = 0
+    clientes_vinculados: list[str] = []
 
     model_config = {"from_attributes": True}
 

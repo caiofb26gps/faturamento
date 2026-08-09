@@ -29,7 +29,7 @@ export function AppLayout({ children }: { children: ReactNode }) {
 
       <AppShell.Navbar p="md">
         <NavLink component={Link} to="/clientes" label="Clientes" />
-        <NavLink component={Link} to="/de-para" label="De/Para geral" />
+        <NavLink component={Link} to="/de-para" label="De/Para verbas" />
       </AppShell.Navbar>
 
       <AppShell.Main bg="gray.0">{children}</AppShell.Main>

@@ -31,7 +31,7 @@ try:
     if cliente is None:
         print(f"Cliente {NOME_CLIENTE!r}/{NEGOCIO!r} não encontrado")
         sys.exit(1)
-    print(f"cliente: {cliente.nome} (id={cliente.id}, segmentacao_mapa={cliente.segmentacao_mapa})")
+    print(f"cliente: {cliente.nome} (id={cliente.id})")
 
     from app.models.lancamento import LancamentoVerba
 
@@ -45,8 +45,8 @@ try:
     print(f"competencias disponíveis para este cliente: {competencias}")
 
     for competencia in competencias:
-        mapas = gerar_mapas(db, cliente.id, competencia)
-        print(f"\ncompetencia {competencia}: {len(mapas)} mapa(s) gerado(s)")
+        mapas, fora_das_regras = gerar_mapas(db, cliente.id, competencia)
+        print(f"\ncompetencia {competencia}: {len(mapas)} mapa(s) gerado(s), {fora_das_regras.quantidade} fora das regras")
         for mapa in mapas[:5]:
             print(f"  mapa id={mapa.id} regra_id={mapa.regra_segmentacao_id} alertas={mapa.alertas} arquivo={mapa.arquivo_path}")
             print(f"    valores_iniciais={mapa.valores_iniciais}")

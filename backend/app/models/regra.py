@@ -6,9 +6,14 @@ from app.models.mixins import TimestampMixin
 
 
 class RegraSegmentacao(Base, TimestampMixin):
-    """Equivalente à aba REGRAS: quando a segmentação do cliente não é GERAL, define
-    para qual destinatário vai cada valor de segmentação (ex: cada colaborador, cada
-    CNPJ, cada UF...).
+    """Uma linha do "grande SE" de segmentação de um cliente: SE `atributo_segmentacao`
+    (CNPJ, CARGO, COLABORADOR...) do colaborador for `valor_segmentacao`, ele cai
+    nesse grupo/destinatário. As regras de um cliente são testadas em ordem
+    (`ordem`, definida manualmente pelo usuário) — a primeira que bater vence, então
+    um cliente pode misturar atributos diferentes regra a regra (ex: uma regra por
+    CNPJ, outra por CARGO). Colaborador que não bate em nenhuma regra fica fora de
+    qualquer mapa naquela competência — só conta no alerta "fora das regras"
+    (ver geracao_mapa.py) para o faturista cadastrar a regra que falta.
 
     `aplica_email` / `aplica_mapa` cobrem o caso em que a segmentação de e-mail e a
     segmentação do mapa divergem — na maioria dos clientes observados elas coincidem,
@@ -20,6 +25,8 @@ class RegraSegmentacao(Base, TimestampMixin):
     id: Mapped[int] = mapped_column(primary_key=True)
     cliente_id: Mapped[int] = mapped_column(ForeignKey("clientes.id"), index=True)
 
+    ordem: Mapped[int] = mapped_column(Integer, default=0)
+    atributo_segmentacao: Mapped[str] = mapped_column(String(50))
     valor_segmentacao: Mapped[str] = mapped_column(String(255), index=True)
     nome_exibicao: Mapped[str] = mapped_column(String(255))
     email_responsavel: Mapped[str] = mapped_column(String(255))

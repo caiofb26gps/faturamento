@@ -1,71 +1,60 @@
 import { useEffect, useState } from 'react'
-import { Select, Stack, Table, Title } from '@mantine/core'
+import { Link } from 'react-router-dom'
+import { Badge, Button, Group, Stack, Table, Title } from '@mantine/core'
 import { api } from '../api/client'
-
-interface DeParaModelo {
-  id: number
-  nome: string
-  cliente_id: number | null
-}
-
-interface DeParaVerba {
-  id: number
-  verba_codigo: string
-  descricao_original: string | null
-  evento_exibicao: string
-  grupo: string
-  ordem_grupo: number
-  ordem_item: number
-}
+import type { DeParaModelo } from '../api/types'
 
 export function DeParaPage() {
   const [modelos, setModelos] = useState<DeParaModelo[]>([])
-  const [modeloId, setModeloId] = useState<string | null>(null)
-  const [itens, setItens] = useState<DeParaVerba[]>([])
 
   useEffect(() => {
-    api.get<DeParaModelo[]>('/de-para/modelos').then(({ data }) => {
-      setModelos(data)
-      const geral = data.find((m) => m.nome === 'GERAL' && m.cliente_id === null)
-      if (geral) setModeloId(String(geral.id))
-    })
+    api.get<DeParaModelo[]>('/de-para/modelos').then(({ data }) => setModelos(data))
   }, [])
-
-  useEffect(() => {
-    if (!modeloId) return
-    api.get<DeParaVerba[]>(`/de-para/modelos/${modeloId}/itens`).then(({ data }) => setItens(data))
-  }, [modeloId])
 
   return (
     <Stack>
-      <Title order={2}>De/Para de verbas</Title>
-      <Select
-        label="Modelo"
-        data={modelos.map((m) => ({ value: String(m.id), label: m.cliente_id ? `${m.nome} (cliente #${m.cliente_id})` : m.nome }))}
-        value={modeloId}
-        onChange={setModeloId}
-        w={300}
-      />
-      <Table striped withTableBorder>
+      <Group justify="space-between">
+        <Title order={2}>De/Para de verbas</Title>
+      </Group>
+
+      <Table striped highlightOnHover withTableBorder>
         <Table.Thead>
           <Table.Tr>
-            <Table.Th>Verba</Table.Th>
-            <Table.Th>Descrição original</Table.Th>
-            <Table.Th>Evento (exibição)</Table.Th>
-            <Table.Th>Grupo</Table.Th>
+            <Table.Th>Nome</Table.Th>
+            <Table.Th>Usado por</Table.Th>
+            <Table.Th>Itens</Table.Th>
+            <Table.Th />
           </Table.Tr>
         </Table.Thead>
         <Table.Tbody>
-          {itens.map((i) => (
-            <Table.Tr key={i.id}>
-              <Table.Td>{i.verba_codigo}</Table.Td>
-              <Table.Td>{i.descricao_original}</Table.Td>
-              <Table.Td>{i.evento_exibicao}</Table.Td>
-              <Table.Td>{i.grupo}</Table.Td>
+          {modelos.map((m) => (
+            <Table.Tr key={m.id}>
+              <Table.Td>
+                {m.nome}
+                {m.nome === 'GERAL' && (
+                  <Badge ml="xs" size="sm" variant="light">
+                    padrão
+                  </Badge>
+                )}
+              </Table.Td>
+              <Table.Td>
+                {m.clientes_vinculados.length === 0
+                  ? '—'
+                  : m.clientes_vinculados.length <= 2
+                    ? m.clientes_vinculados.join(', ')
+                    : `${m.clientes_vinculados.length} clientes`}
+              </Table.Td>
+              <Table.Td>{m.total_itens}</Table.Td>
+              <Table.Td>
+                <Button component={Link} to={`/de-para/${m.id}`} size="xs" variant="light">
+                  Abrir
+                </Button>
+              </Table.Td>
             </Table.Tr>
           ))}
         </Table.Tbody>
       </Table>
+      {modelos.length === 0 && <div>Nenhum De/Para cadastrado ainda.</div>}
     </Stack>
   )
 }

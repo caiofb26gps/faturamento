@@ -12,4 +12,5 @@ build/
 *.log
 backend/uploads/
 backend/generated/
+*.db
 .claude/

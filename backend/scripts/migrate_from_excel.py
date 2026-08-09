@@ -55,6 +55,13 @@ def s(value) -> str | None:
     return texto or None
 
 
+def parece_email(valor: str | None) -> bool:
+    """Checagem simples (não é validação RFC completa) para filtrar lixo que às
+    vezes aparece na coluna 'Analista Responsável' da planilha (ex: '0',
+    'faturamento rj', notas soltas) em vez de um e-mail real."""
+    return bool(valor) and "@" in valor and "." in valor.split("@", 1)[1]
+
+
 def eh_sim(value) -> bool:
     texto = s(value)
     return bool(texto) and texto.strip().upper().startswith("SIM")
@@ -85,7 +92,7 @@ def linhas(ws, min_row=2):
 def carregar_usuarios(db, emails: set[str]) -> dict[str, int]:
     mapa = {}
     criados = 0
-    for email in sorted(e for e in emails if e):
+    for email in sorted(e for e in emails if e and parece_email(e)):
         email_norm = email.lower()
         usuario = db.query(Usuario).filter(Usuario.email == email_norm).first()
         if usuario is None:
@@ -118,9 +125,9 @@ def carregar_atributos(db, codigos: set[str]) -> None:
 
 
 def carregar_de_para_geral(db, wb_de_para) -> DeParaModelo:
-    modelo = db.query(DeParaModelo).filter(DeParaModelo.nome == "GERAL", DeParaModelo.cliente_id.is_(None)).first()
+    modelo = db.query(DeParaModelo).filter(DeParaModelo.nome == "GERAL").first()
     if modelo is None:
-        modelo = DeParaModelo(nome="GERAL", cliente_id=None)
+        modelo = DeParaModelo(nome="GERAL")
         db.add(modelo)
         db.flush()
 
@@ -170,7 +177,13 @@ def resolver_de_para_modelo_id(valor, geral_modelo: DeParaModelo, cliente_nome: 
     return geral_modelo.id, f"PENDENTE: precisa de De/Para próprio '{texto}' (migrado com GERAL provisoriamente)"
 
 
-def carregar_clientes_mapas(db, ws, usuarios: dict[str, int], geral_modelo: DeParaModelo, avisos: list[str]) -> dict[tuple[str, str], int]:
+def carregar_clientes_mapas(
+    db, ws, usuarios: dict[str, int], geral_modelo: DeParaModelo, avisos: list[str], segmentacao_mapa_legada: dict[int, str]
+) -> dict[tuple[str, str], int]:
+    """`segmentacao_mapa_legada` é preenchido aqui (cliente_id -> segmentação que a
+    planilha tinha) para `carregar_regras` saber que atributo cada regra migrada
+    deve testar — não existe mais coluna de segmentação no cadastro do cliente
+    (ver models/regra.py: cada regra agora carrega seu próprio atributo)."""
     resolvidos: dict[tuple[str, str], int] = {}
     total = 0
     for row in linhas(ws):
@@ -178,7 +191,7 @@ def carregar_clientes_mapas(db, ws, usuarios: dict[str, int], geral_modelo: DePa
             _regra,
             negocio,
             cliente_nome,
-            seg_email,
+            _seg_email,
             seg_mapa,
             de_para,
             modelo_mapa,
@@ -203,8 +216,6 @@ def carregar_clientes_mapas(db, ws, usuarios: dict[str, int], geral_modelo: DePa
             negocio=negocio_n,
             nome=nome_n,
             status=StatusCliente.ATIVO,
-            segmentacao_email=(s(seg_email) or "GERAL").upper(),
-            segmentacao_mapa=(s(seg_mapa) or "GERAL").upper(),
             de_para_modelo_id=de_para_modelo_id,
             modelo_mapa_codigo=(s(modelo_mapa) or "GERAL").upper(),
             analista_responsavel_id=usuarios.get((s(analista_email) or "").lower()) if s(analista_email) else None,
@@ -218,12 +229,21 @@ def carregar_clientes_mapas(db, ws, usuarios: dict[str, int], geral_modelo: DePa
         db.add(cliente)
         db.flush()
         resolvidos[(negocio_n, nome_n)] = cliente.id
+        segmentacao_mapa_legada[cliente.id] = (s(seg_mapa) or "GERAL").upper()
         total += 1
     print(f"  clientes (MAPAS -> ATIVO): {total}")
     return resolvidos
 
 
-def carregar_clientes_pendentes(db, ws, usuarios: dict[str, int], geral_modelo: DeParaModelo, avisos: list[str], resolvidos: dict[tuple[str, str], int]) -> None:
+def carregar_clientes_pendentes(
+    db,
+    ws,
+    usuarios: dict[str, int],
+    geral_modelo: DeParaModelo,
+    avisos: list[str],
+    resolvidos: dict[tuple[str, str], int],
+    segmentacao_mapa_legada: dict[int, str],
+) -> None:
     total = 0
     for row in linhas(ws):
         (
@@ -259,8 +279,6 @@ def carregar_clientes_pendentes(db, ws, usuarios: dict[str, int], geral_modelo: 
             negocio=negocio_n,
             nome=nome_n,
             status=StatusCliente.PENDENTE,
-            segmentacao_email="GERAL",
-            segmentacao_mapa="GERAL",
             de_para_modelo_id=de_para_modelo_id,
             modelo_mapa_codigo=(s(modelo_mapa) or "GERAL").upper(),
             analista_responsavel_id=usuarios.get((s(analista_email) or "").lower()) if s(analista_email) else None,
@@ -274,13 +292,22 @@ def carregar_clientes_pendentes(db, ws, usuarios: dict[str, int], geral_modelo: 
         db.add(cliente)
         db.flush()
         resolvidos[(negocio_n, nome_n)] = cliente.id
+        segmentacao_mapa_legada[cliente.id] = "GERAL"
         total += 1
     print(f"  clientes (Pendentes -> PENDENTE): {total}")
 
 
-def carregar_regras(db, ws, usuarios: dict[str, int], clientes: dict[tuple[str, str], int], avisos: list[str]) -> None:
+def carregar_regras(
+    db,
+    ws,
+    usuarios: dict[str, int],
+    clientes: dict[tuple[str, str], int],
+    avisos: list[str],
+    segmentacao_mapa_legada: dict[int, str],
+) -> None:
     total = 0
     nao_casados = 0
+    ordem_por_cliente: dict[int, int] = defaultdict(int)
     for row in linhas(ws):
         (
             _regra,
@@ -313,9 +340,18 @@ def carregar_regras(db, ws, usuarios: dict[str, int], clientes: dict[tuple[str, 
             avisos.append(f"Regra sem cliente correspondente: negocio={negocio_n!r} cliente={nome_n!r}")
             continue
 
+        ordem = ordem_por_cliente[cliente_id]
+        ordem_por_cliente[cliente_id] += 1
+
         db.add(
             RegraSegmentacao(
                 cliente_id=cliente_id,
+                # A planilha não tinha um atributo por regra — era um único tipo por
+                # cliente (coluna "Segmentação Mapa" da aba MAPAS). Preserva esse
+                # comportamento na migração; o atributo pode ser ajustado regra a
+                # regra depois, agora que cada uma pode testar algo diferente.
+                ordem=ordem,
+                atributo_segmentacao=segmentacao_mapa_legada.get(cliente_id, "GERAL"),
                 valor_segmentacao=s(valor) or "",
                 nome_exibicao=s(nome_exibicao) or "",
                 email_responsavel=s(email_responsavel) or "",
@@ -348,12 +384,24 @@ def main() -> None:
 
     # --- coleta prévia para usuarios e atributos, antes de qualquer insert ---
     emails = set()
-    for row in linhas(ws_mapas):
-        emails.add(s(row[7]))  # Analista Responsável
-    for row in linhas(ws_pendentes):
-        emails.add(s(row[6]))  # Analista Responsável
-    for row in linhas(ws_regras):
-        emails.add(s(row[8]))  # Analista
+    emails_invalidos = set()
+    for row, coluna in (
+        *((r, 7) for r in linhas(ws_mapas)),  # Analista Responsável
+        *((r, 6) for r in linhas(ws_pendentes)),  # Analista Responsável
+        *((r, 8) for r in linhas(ws_regras)),  # Analista
+    ):
+        valor = s(row[coluna])
+        if valor is None:
+            continue
+        if parece_email(valor):
+            emails.add(valor)
+        else:
+            emails_invalidos.add(valor)
+    if emails_invalidos:
+        avisos.append(
+            f"{len(emails_invalidos)} valor(es) na coluna Analista não parecem e-mail e foram ignorados: "
+            f"{sorted(emails_invalidos)}"
+        )
 
     codigos_atributos = {s(row[0]) for row in linhas(ws_listas)} | {"COLABORADOR", "GERAL"}
     for row in linhas(ws_mapas):
@@ -373,11 +421,12 @@ def main() -> None:
         carregar_campos_cadastrais(db, wb_de_para)
 
         print("Carregando clientes...")
-        clientes = carregar_clientes_mapas(db, ws_mapas, usuarios, geral_modelo, avisos)
-        carregar_clientes_pendentes(db, ws_pendentes, usuarios, geral_modelo, avisos, clientes)
+        segmentacao_mapa_legada: dict[int, str] = {}
+        clientes = carregar_clientes_mapas(db, ws_mapas, usuarios, geral_modelo, avisos, segmentacao_mapa_legada)
+        carregar_clientes_pendentes(db, ws_pendentes, usuarios, geral_modelo, avisos, clientes, segmentacao_mapa_legada)
 
         print("Carregando regras de segmentação...")
-        carregar_regras(db, ws_regras, usuarios, clientes, avisos)
+        carregar_regras(db, ws_regras, usuarios, clientes, avisos, segmentacao_mapa_legada)
 
         db.commit()
         print("\nMigração concluída e commitada.")

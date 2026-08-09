@@ -1,8 +1,10 @@
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
 from app.core.deps import get_current_user, require_admin
+from app.models.cliente import Cliente
 from app.models.de_para import CampoCadastralMapa, DeParaModelo, DeParaVerba
 from app.models.enums import AcaoAuditoria
 from app.models.usuario import Usuario
@@ -19,9 +21,28 @@ from app.services.auditoria import registrar
 router = APIRouter(prefix="/de-para", tags=["de-para"])
 
 
+def _com_extras(db: Session, modelo: DeParaModelo) -> DeParaModeloOut:
+    total_itens = db.query(func.count(DeParaVerba.id)).filter(DeParaVerba.de_para_modelo_id == modelo.id).scalar()
+    clientes_vinculados = [
+        nome for (nome,) in db.query(Cliente.nome).filter(Cliente.de_para_modelo_id == modelo.id).all()
+    ]
+    return DeParaModeloOut.model_validate(modelo).model_copy(
+        update={"total_itens": total_itens, "clientes_vinculados": clientes_vinculados}
+    )
+
+
 @router.get("/modelos", response_model=list[DeParaModeloOut])
 def listar_modelos(db: Session = Depends(get_db), usuario: Usuario = Depends(get_current_user)):
-    return db.query(DeParaModelo).all()
+    modelos = db.query(DeParaModelo).order_by(DeParaModelo.nome).all()
+    return [_com_extras(db, modelo) for modelo in modelos]
+
+
+@router.get("/modelos/{modelo_id}", response_model=DeParaModeloOut)
+def obter_modelo(modelo_id: int, db: Session = Depends(get_db), usuario: Usuario = Depends(get_current_user)):
+    modelo = db.query(DeParaModelo).filter(DeParaModelo.id == modelo_id).first()
+    if modelo is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Modelo de De/Para não encontrado")
+    return _com_extras(db, modelo)
 
 
 @router.post("/modelos", response_model=DeParaModeloOut, status_code=status.HTTP_201_CREATED)

@@ -22,8 +22,6 @@ class ClienteBase(BaseModel):
     negocio: str
     nome: str
     status: StatusCliente = StatusCliente.PENDENTE
-    segmentacao_email: str = "GERAL"
-    segmentacao_mapa: str = "GERAL"
     de_para_modelo_id: int | None = None
     modelo_mapa_codigo: str = "GERAL"
     analista_responsavel_id: int | None = None
@@ -47,5 +45,6 @@ class ClienteUpdate(ClienteCreate):
 class ClienteOut(ClienteBase):
     id: int
     portal_credenciais_configuradas: bool = False
+    total_regras: int = 0
 
     model_config = {"from_attributes": True}

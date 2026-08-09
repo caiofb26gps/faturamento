@@ -2,6 +2,8 @@ from pydantic import BaseModel
 
 
 class RegraSegmentacaoBase(BaseModel):
+    ordem: int = 0
+    atributo_segmentacao: str
     valor_segmentacao: str
     nome_exibicao: str
     email_responsavel: str

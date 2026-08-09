@@ -47,8 +47,7 @@ CAMPO_CADASTRAL_ATRIBUTO = {
     "Situação": "situacao_folha",
 }
 
-SEGMENTACAO_CAMPO = {
-    "GERAL": None,
+ATRIBUTO_PARA_CAMPO_LANCAMENTO = {
     "COLABORADOR": "colaborador",
     "CNPJ": "cnpj",
     "CC": "cc",
@@ -66,8 +65,7 @@ ORDEM_TOTAL = (102, 102001, "Total")
 
 @dataclass
 class ResultadoSegmento:
-    valor_segmentacao: str
-    regra: RegraSegmentacao | None
+    regra: RegraSegmentacao | None  # None = bucket GERAL (cliente sem nenhuma regra)
     linhas_colaborador: dict  # matricula -> {campo_cadastral: valor}
     valores_por_colaborador: dict  # matricula -> {evento: Decimal}
     eventos_ordenados: list  # [(ordem_grupo, ordem_item, grupo, evento)]
@@ -80,6 +78,17 @@ class SegmentacaoNaoSuportada(Exception):
     pass
 
 
+def _resolver_atributo(linha: LancamentoVerba, atributo: str) -> str | None:
+    campo = ATRIBUTO_PARA_CAMPO_LANCAMENTO.get(atributo)
+    if campo is None:
+        raise SegmentacaoNaoSuportada(
+            f"Atributo de segmentação '{atributo}' ainda não é suportado pelo gerador "
+            "(hoje só COLABORADOR, CNPJ, CC, CARGO — SRA/CTT ainda não estão integrados)."
+        )
+    valor = getattr(linha, campo)
+    return valor.strip() if isinstance(valor, str) else valor
+
+
 def _decimal(v) -> Decimal:
     return v if isinstance(v, Decimal) else Decimal(str(v or 0))
 
@@ -87,7 +96,6 @@ def _decimal(v) -> Decimal:
 def _montar_segmento(
     linhas: list[LancamentoVerba],
     de_para_por_codigo: dict[str, DeParaVerba],
-    valor_segmentacao: str,
     regra: RegraSegmentacao | None,
 ) -> ResultadoSegmento:
     valores_por_colaborador: dict[str, dict[str, Decimal]] = defaultdict(lambda: defaultdict(Decimal))
@@ -152,7 +160,6 @@ def _montar_segmento(
             grand_total[evento] += valor
 
     return ResultadoSegmento(
-        valor_segmentacao=valor_segmentacao,
         regra=regra,
         linhas_colaborador=cadastro_por_colaborador,
         valores_por_colaborador=dict(valores_por_colaborador),
@@ -163,7 +170,13 @@ def _montar_segmento(
     )
 
 
-def gerar_mapas(db: Session, cliente_id: int, competencia: str) -> list[MapaGerado]:
+@dataclass
+class ForaDasRegras:
+    quantidade: int = 0
+    colaboradores: list[dict] = field(default_factory=list)  # [{matricula, colaborador}]
+
+
+def gerar_mapas(db: Session, cliente_id: int, competencia: str) -> tuple[list[MapaGerado], ForaDasRegras]:
     cliente = db.query(Cliente).filter(Cliente.id == cliente_id).one()
 
     lancamentos = (
@@ -172,7 +185,7 @@ def gerar_mapas(db: Session, cliente_id: int, competencia: str) -> list[MapaGera
         .all()
     )
     if not lancamentos:
-        return []
+        return [], ForaDasRegras()
 
     de_para_por_codigo = {
         item.verba_codigo: item
@@ -180,57 +193,88 @@ def gerar_mapas(db: Session, cliente_id: int, competencia: str) -> list[MapaGera
         if item.grupo not in GRUPOS_SINTETICOS
     }
 
-    campo_segmentacao = SEGMENTACAO_CAMPO.get(cliente.segmentacao_mapa)
-    if cliente.segmentacao_mapa not in SEGMENTACAO_CAMPO:
-        raise SegmentacaoNaoSuportada(
-            f"Segmentação de mapa '{cliente.segmentacao_mapa}' do cliente '{cliente.nome}' ainda não é suportada "
-            "pelo gerador (só GERAL, COLABORADOR, CNPJ, CC, CARGO por enquanto)."
-        )
-
-    regras_por_valor = {
-        r.valor_segmentacao.strip().upper(): r
-        for r in db.query(RegraSegmentacao).filter(
-            RegraSegmentacao.cliente_id == cliente_id, RegraSegmentacao.aplica_mapa.is_(True)
-        )
-    }
-
-    grupos: dict[str, list[LancamentoVerba]] = defaultdict(list)
-    for linha in lancamentos:
-        chave = "GERAL" if campo_segmentacao is None else (getattr(linha, campo_segmentacao) or "").strip()
-        grupos[chave or "SEM_VALOR"].append(linha)
+    regras = (
+        db.query(RegraSegmentacao)
+        .filter(RegraSegmentacao.cliente_id == cliente_id, RegraSegmentacao.aplica_mapa.is_(True))
+        .order_by(RegraSegmentacao.ordem, RegraSegmentacao.id)
+        .all()
+    )
 
     campos_cadastrais_ordenados = [
         c.campo for c in db.query(CampoCadastralMapa).order_by(CampoCadastralMapa.ordem).all() if c.campo in CAMPO_CADASTRAL_ATRIBUTO
     ] or list(CAMPO_CADASTRAL_ATRIBUTO.keys())
 
     mapas_gerados: list[MapaGerado] = []
-    for chave, linhas in grupos.items():
-        regra = None if campo_segmentacao is None else regras_por_valor.get(chave.upper())
-        segmento = _montar_segmento(linhas, de_para_por_codigo, chave, regra)
+    fora_das_regras = ForaDasRegras()
 
-        alertas = {
-            "fora_das_regras": campo_segmentacao is not None and regra is None,
-            "verbas_fora_de_para": sorted(segmento.verbas_fora_de_para),
-        }
-        valores_iniciais = {grupo: str(valor) for grupo, valor in segmento.totais_por_grupo.items()}
+    if not regras:
+        # Cliente sem nenhuma regra cadastrada -> um único mapa GERAL com todo mundo.
+        segmento = _montar_segmento(lancamentos, de_para_por_codigo, None)
+        mapas_gerados.append(_criar_mapa(db, cliente, competencia, None, segmento, campos_cadastrais_ordenados))
+        db.commit()
+        return mapas_gerados, fora_das_regras
 
-        mapa = MapaGerado(
-            cliente_id=cliente_id,
-            regra_segmentacao_id=regra.id if regra else None,
-            competencia=competencia,
-            status=StatusMapaGerado.RASCUNHO,
-            valores_iniciais=valores_iniciais,
-            alertas=alertas,
-        )
-        db.add(mapa)
-        db.flush()
+    # "Grande SE": agrupa por colaborador primeiro (é a unidade do mapa final), e
+    # testa as regras em ordem contra os atributos DESSE colaborador — cada regra
+    # pode olhar um atributo diferente (uma por CNPJ, outra por CARGO...), a
+    # primeira que bater vence.
+    linhas_por_colaborador: dict[str, list[LancamentoVerba]] = defaultdict(list)
+    for linha in lancamentos:
+        chave_colaborador = linha.matricula or linha.colaborador or "SEM_MATRICULA"
+        linhas_por_colaborador[chave_colaborador].append(linha)
 
-        caminho = _gerar_arquivo_xlsx(cliente, mapa, segmento, campos_cadastrais_ordenados)
-        mapa.arquivo_path = caminho
-        mapas_gerados.append(mapa)
+    linhas_por_regra: dict[int, list[LancamentoVerba]] = defaultdict(list)
+    for chave_colaborador, linhas_colaborador in linhas_por_colaborador.items():
+        primeira_linha = linhas_colaborador[0]
+        regra_vencedora = None
+        for regra in regras:
+            valor_colaborador = _resolver_atributo(primeira_linha, regra.atributo_segmentacao)
+            if valor_colaborador and valor_colaborador.strip().upper() == regra.valor_segmentacao.strip().upper():
+                regra_vencedora = regra
+                break
+
+        if regra_vencedora is None:
+            fora_das_regras.quantidade += 1
+            fora_das_regras.colaboradores.append(
+                {"matricula": primeira_linha.matricula, "colaborador": primeira_linha.colaborador}
+            )
+            continue
+
+        linhas_por_regra[regra_vencedora.id].extend(linhas_colaborador)
+
+    regras_por_id = {r.id: r for r in regras}
+    for regra_id, linhas_regra in linhas_por_regra.items():
+        regra = regras_por_id[regra_id]
+        segmento = _montar_segmento(linhas_regra, de_para_por_codigo, regra)
+        mapas_gerados.append(_criar_mapa(db, cliente, competencia, regra, segmento, campos_cadastrais_ordenados))
 
     db.commit()
-    return mapas_gerados
+    return mapas_gerados, fora_das_regras
+
+
+def _criar_mapa(
+    db: Session,
+    cliente: Cliente,
+    competencia: str,
+    regra: RegraSegmentacao | None,
+    segmento: ResultadoSegmento,
+    campos_cadastrais: list[str],
+) -> MapaGerado:
+    alertas = {"verbas_fora_de_para": sorted(segmento.verbas_fora_de_para)}
+    valores_iniciais = {grupo: str(valor) for grupo, valor in segmento.totais_por_grupo.items()}
+
+    mapa = MapaGerado(
+        cliente_id=cliente.id,
+        regra_segmentacao_id=regra.id if regra else None,
+        competencia=competencia,
+        status=StatusMapaGerado.RASCUNHO,
+        valores_iniciais=valores_iniciais,
+        alertas=alertas,
+    )
+    db.add(mapa)
+    db.flush()
+    mapa.arquivo_path = _gerar_arquivo_xlsx(cliente, mapa, segmento, campos_cadastrais)
+    return mapa
 
 
 def _gerar_arquivo_xlsx(cliente: Cliente, mapa: MapaGerado, segmento: ResultadoSegmento, campos_cadastrais: list[str]) -> str:

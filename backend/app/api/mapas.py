@@ -7,13 +7,13 @@ from app.core.deps import get_current_user
 from app.models.cliente import Cliente
 from app.models.mapa import MapaGerado
 from app.models.usuario import Usuario
-from app.schemas.mapa import MapaGeradoOut
+from app.schemas.mapa import GeracaoMapaResultadoOut, MapaGeradoOut
 from app.services.geracao_mapa import SegmentacaoNaoSuportada, gerar_mapas
 
 router = APIRouter(tags=["mapas"])
 
 
-@router.post("/clientes/{cliente_id}/mapas/gerar", response_model=list[MapaGeradoOut])
+@router.post("/clientes/{cliente_id}/mapas/gerar", response_model=GeracaoMapaResultadoOut)
 def gerar_mapas_cliente(
     cliente_id: int,
     competencia: str,
@@ -25,16 +25,16 @@ def gerar_mapas_cliente(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Cliente não encontrado")
 
     try:
-        mapas = gerar_mapas(db, cliente_id, competencia)
+        mapas, fora_das_regras = gerar_mapas(db, cliente_id, competencia)
     except SegmentacaoNaoSuportada as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
 
-    if not mapas:
+    if not mapas and not fora_das_regras.colaboradores:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"Nenhum lançamento encontrado para este cliente na competência {competencia}",
         )
-    return mapas
+    return {"mapas": mapas, "fora_das_regras": fora_das_regras}
 
 
 @router.get("/clientes/{cliente_id}/mapas", response_model=list[MapaGeradoOut])

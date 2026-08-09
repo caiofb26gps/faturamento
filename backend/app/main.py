@@ -7,7 +7,9 @@ app = FastAPI(title="Mapa de Faturamento", version="0.1.0")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
+    # regex (não uma lista fixa) porque em dev o Vite muda de porta quando a
+    # padrão (5173) já está em uso por outra sessão.
+    allow_origin_regex=r"http://localhost:\d+",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

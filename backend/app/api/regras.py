@@ -23,7 +23,39 @@ def _cliente_ou_404(db: Session, cliente_id: int) -> Cliente:
 @router.get("", response_model=list[RegraSegmentacaoOut])
 def listar_regras(cliente_id: int, db: Session = Depends(get_db), usuario: Usuario = Depends(get_current_user)):
     _cliente_ou_404(db, cliente_id)
-    return db.query(RegraSegmentacao).filter(RegraSegmentacao.cliente_id == cliente_id).all()
+    return (
+        db.query(RegraSegmentacao)
+        .filter(RegraSegmentacao.cliente_id == cliente_id)
+        .order_by(RegraSegmentacao.ordem, RegraSegmentacao.id)
+        .all()
+    )
+
+
+@router.put("/reordenar", response_model=list[RegraSegmentacaoOut])
+def reordenar_regras(
+    cliente_id: int,
+    ids_em_ordem: list[int],
+    db: Session = Depends(get_db),
+    usuario: Usuario = Depends(require_admin),
+):
+    """Recebe os ids das regras do cliente na ordem desejada (primeira = testada
+    primeiro no "grande SE") e renumera `ordem` de acordo."""
+    _cliente_ou_404(db, cliente_id)
+    regras = {r.id: r for r in db.query(RegraSegmentacao).filter(RegraSegmentacao.cliente_id == cliente_id).all()}
+    if set(ids_em_ordem) != set(regras.keys()):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="A lista precisa conter exatamente os ids de todas as regras deste cliente",
+        )
+    for posicao, regra_id in enumerate(ids_em_ordem):
+        regras[regra_id].ordem = posicao
+    db.commit()
+    return (
+        db.query(RegraSegmentacao)
+        .filter(RegraSegmentacao.cliente_id == cliente_id)
+        .order_by(RegraSegmentacao.ordem, RegraSegmentacao.id)
+        .all()
+    )
 
 
 @router.post("", response_model=RegraSegmentacaoOut, status_code=status.HTTP_201_CREATED)

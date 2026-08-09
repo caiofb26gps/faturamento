@@ -14,11 +14,10 @@ class Cliente(Base, TimestampMixin):
     nome: Mapped[str] = mapped_column(String(255), index=True)
     status: Mapped[StatusCliente] = mapped_column(Enum(StatusCliente, name="status_cliente"), default=StatusCliente.PENDENTE)
 
-    # Código do atributo de segmentação (ver AtributoSegmentacao) usado para dividir
-    # e-mail e mapa. Na prática de hoje quase sempre coincidem, mas o modelo permite
-    # que um cliente segmente e-mail e mapa de forma diferente.
-    segmentacao_email: Mapped[str] = mapped_column(String(50), default="GERAL")
-    segmentacao_mapa: Mapped[str] = mapped_column(String(50), default="GERAL")
+    # Não existe mais um "tipo de segmentação" único do cliente — cada
+    # RegraSegmentacao carrega seu próprio atributo (CNPJ, CARGO, COLABORADOR...) e
+    # é testada em ordem (ver `RegraSegmentacao.ordem`), como um grande SE/SENÃO.
+    # Cliente sem nenhuma regra = um único mapa (GERAL). Ver geracao_mapa.py.
 
     # use_alter=True quebra o ciclo de FK com de_para_modelos.cliente_id (um cliente
     # aponta para o seu de/para; um de/para aponta para o cliente dono) para que o

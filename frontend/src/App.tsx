@@ -6,6 +6,7 @@ import { LoginPage } from './pages/LoginPage'
 import { ClientesPage } from './pages/ClientesPage'
 import { ClienteDetailPage } from './pages/ClienteDetailPage'
 import { DeParaPage } from './pages/DeParaPage'
+import { DeParaDetailPage } from './pages/DeParaDetailPage'
 
 function App() {
   return (
@@ -38,6 +39,16 @@ function App() {
             <ProtectedRoute>
               <AppLayout>
                 <DeParaPage />
+              </AppLayout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/de-para/:modeloId"
+          element={
+            <ProtectedRoute>
+              <AppLayout>
+                <DeParaDetailPage />
               </AppLayout>
             </ProtectedRoute>
           }

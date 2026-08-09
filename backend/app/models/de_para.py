@@ -6,14 +6,14 @@ from app.models.mixins import TimestampMixin
 
 
 class DeParaModelo(Base, TimestampMixin):
-    """Um De/Para de verbas. `cliente_id` nulo = modelo padrão GERAL, usado por
-    qualquer cliente que não tenha um De/Para próprio."""
+    """Um De/Para de verbas. Não sabe quem usa ele — a relação é sempre no sentido
+    Cliente -> De/Para (`Cliente.de_para_modelo_id`), nunca o contrário. "GERAL" é só
+    o nome convencional do modelo padrão; nada aqui o trata como especial."""
 
     __tablename__ = "de_para_modelos"
 
     id: Mapped[int] = mapped_column(primary_key=True)
     nome: Mapped[str] = mapped_column(String(150))
-    cliente_id: Mapped[int | None] = mapped_column(ForeignKey("clientes.id"), nullable=True)
 
     itens: Mapped[list["DeParaVerba"]] = relationship(back_populates="modelo", cascade="all, delete-orphan")
 

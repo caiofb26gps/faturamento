@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from app.core.crypto import encrypt_secret
 from app.core.database import get_db
@@ -22,12 +22,13 @@ router = APIRouter(prefix="/clientes", tags=["clientes"])
 def _to_out(cliente: Cliente) -> ClienteOut:
     out = ClienteOut.model_validate(cliente)
     out.portal_credenciais_configuradas = bool(cliente.portal_login_cifrado or cliente.portal_senha_cifrada)
+    out.total_regras = len(cliente.regras_segmentacao)
     return out
 
 
 @router.get("", response_model=list[ClienteOut])
 def listar_clientes(usuario: Usuario = Depends(get_current_user), db: Session = Depends(get_db)):
-    query = db.query(Cliente)
+    query = db.query(Cliente).options(selectinload(Cliente.regras_segmentacao))
     if usuario.papel != PapelUsuario.ADMIN:
         query = query.filter(Cliente.analista_responsavel_id == usuario.id)
     return [_to_out(c) for c in query.order_by(Cliente.nome).all()]

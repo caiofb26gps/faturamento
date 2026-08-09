@@ -15,3 +15,18 @@ class MapaGeradoOut(BaseModel):
     alertas: dict | None
 
     model_config = {"from_attributes": True}
+
+
+class ColaboradorForaDasRegrasOut(BaseModel):
+    matricula: str | None
+    colaborador: str | None
+
+
+class ForaDasRegrasOut(BaseModel):
+    quantidade: int = 0
+    colaboradores: list[ColaboradorForaDasRegrasOut] = []
+
+
+class GeracaoMapaResultadoOut(BaseModel):
+    mapas: list[MapaGeradoOut]
+    fora_das_regras: ForaDasRegrasOut
