@@ -7,6 +7,10 @@ services:
     buildCommand: "pip install -r requirements.txt && alembic upgrade head"
     startCommand: "uvicorn app.main:app --host 0.0.0.0 --port $PORT"
     envVars:
+      # O default do Render é 3.14, que ainda não tem wheel pronta pra várias
+      # libs — fixar aqui evita build compilando C/Rust do zero (e falhando).
+      - key: PYTHON_VERSION
+        value: "3.12.7"
       - key: DATABASE_URL
         value: "sqlite:///./dev.db"
       - key: TURSO_DATABASE_URL

@@ -7,10 +7,9 @@ Uso: python scripts/_criar_admin_turso.py email@empresa.com "Nome Completo" senh
 import sys
 
 sys.path.insert(0, ".")
+sys.path.insert(0, "scripts")
 
-import libsql_client
-
-from app.core.config import get_settings
+from _turso_http import criar_client
 from app.core.security import hash_password
 
 if len(sys.argv) != 4:
@@ -19,13 +18,7 @@ if len(sys.argv) != 4:
 
 email, nome, senha = sys.argv[1], sys.argv[2], sys.argv[3]
 
-settings = get_settings()
-if not (settings.turso_database_url and settings.turso_auth_token):
-    print("TURSO_DATABASE_URL / TURSO_AUTH_TOKEN não configurados no .env")
-    sys.exit(1)
-
-url_http = settings.turso_database_url.removeprefix("libsql://")
-client = libsql_client.create_client_sync(url=f"https://{url_http}", auth_token=settings.turso_auth_token)
+client = criar_client()
 
 existe = client.execute("SELECT id FROM usuarios WHERE email = ?", [email])
 if existe.rows:
