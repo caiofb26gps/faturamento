@@ -51,8 +51,10 @@ r = client.post(
     f"/clientes/{cliente['id']}/regras",
     headers=headers,
     json={
-        "atributo_segmentacao": "COLABORADOR",
-        "valor_segmentacao": "MARIANGELA DA SILVA REIS PONCA",
+        "logica": "E",
+        "condicoes": [
+            {"atributo": "COLABORADOR", "comparador": "IGUAL", "valor": "MARIANGELA DA SILVA REIS PONCA"}
+        ],
         "nome_exibicao": "CAROLINA DINIZ",
         "email_responsavel": "cpdiniz2@mmm.com",
         "dia_envio": 11,

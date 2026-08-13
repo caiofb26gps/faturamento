@@ -31,10 +31,10 @@ from sqlalchemy.orm import Session
 from app.core.config import get_settings
 from app.models.cliente import Cliente
 from app.models.de_para import CampoCadastralMapa, DeParaVerba
-from app.models.enums import StatusMapaGerado
+from app.models.enums import ComparadorCondicao, LogicaRegra, StatusMapaGerado
 from app.models.lancamento import LancamentoVerba
 from app.models.mapa import MapaGerado
-from app.models.regra import RegraSegmentacao
+from app.models.regra import RegraCondicao, RegraSegmentacao
 
 CAMPO_CADASTRAL_ATRIBUTO = {
     "Filial": "filial",
@@ -87,6 +87,35 @@ def _resolver_atributo(linha: LancamentoVerba, atributo: str) -> str | None:
         )
     valor = getattr(linha, campo)
     return valor.strip() if isinstance(valor, str) else valor
+
+
+def _condicao_bate(linha: LancamentoVerba, condicao: RegraCondicao) -> bool:
+    """Avalia uma condição contra os dados do colaborador.
+
+    Comparação sempre normalizada (maiúsculas e sem espaços nas pontas), porque os
+    valores vêm digitados à mão no cadastro e da folha com padding. Atributo nulo
+    no lançamento vira "" — então DIFERENTE bate (um cargo vazio é de fato
+    diferente de "OPERADOR") e IGUAL/CONTEM não batem.
+    """
+    valor_linha = (_resolver_atributo(linha, condicao.atributo) or "").strip().upper()
+    valor_regra = (condicao.valor or "").strip().upper()
+
+    if condicao.comparador == ComparadorCondicao.IGUAL:
+        return valor_linha == valor_regra
+    if condicao.comparador == ComparadorCondicao.CONTEM:
+        return valor_regra in valor_linha
+    if condicao.comparador == ComparadorCondicao.DIFERENTE:
+        return valor_linha != valor_regra
+    raise SegmentacaoNaoSuportada(f"Comparador '{condicao.comparador}' não implementado")
+
+
+def _regra_bate(linha: LancamentoVerba, regra: RegraSegmentacao) -> bool:
+    if not regra.condicoes:
+        # A API exige ao menos uma condição; se chegou aqui sem nenhuma, é dado
+        # legado/inconsistente — não bater é mais seguro que virar um "pega tudo".
+        return False
+    resultados = (_condicao_bate(linha, c) for c in regra.condicoes)
+    return all(resultados) if regra.logica == LogicaRegra.E else any(resultados)
 
 
 def _decimal(v) -> Decimal:
@@ -226,12 +255,7 @@ def gerar_mapas(db: Session, cliente_id: int, competencia: str) -> tuple[list[Ma
     linhas_por_regra: dict[int, list[LancamentoVerba]] = defaultdict(list)
     for chave_colaborador, linhas_colaborador in linhas_por_colaborador.items():
         primeira_linha = linhas_colaborador[0]
-        regra_vencedora = None
-        for regra in regras:
-            valor_colaborador = _resolver_atributo(primeira_linha, regra.atributo_segmentacao)
-            if valor_colaborador and valor_colaborador.strip().upper() == regra.valor_segmentacao.strip().upper():
-                regra_vencedora = regra
-                break
+        regra_vencedora = next((regra for regra in regras if _regra_bate(primeira_linha, regra)), None)
 
         if regra_vencedora is None:
             fora_das_regras.quantidade += 1

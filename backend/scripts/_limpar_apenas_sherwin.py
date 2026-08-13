@@ -18,7 +18,7 @@ from app.models.envio import Envio
 from app.models.importacao import Importacao
 from app.models.lancamento import LancamentoVerba
 from app.models.mapa import MapaGerado
-from app.models.regra import RegraSegmentacao
+from app.models.regra import RegraCondicao, RegraSegmentacao
 
 NOME_CLIENTE = "SHERWIN WILLIAMS"
 
@@ -33,7 +33,15 @@ try:
     n_mapas = db.query(MapaGerado).filter(MapaGerado.cliente_id != cliente.id).delete(synchronize_session=False)
 
     n_lanc = db.query(LancamentoVerba).filter(LancamentoVerba.cliente_id != cliente.id).delete(synchronize_session=False)
+
+    # As condições precisam sair explicitamente: `.delete()` em massa é SQL puro,
+    # não passa pelo cascade do ORM. Sem isso ficam condições órfãs que depois
+    # "grudam" numa regra nova que reuse o mesmo id.
+    regras_de_outros = [r for (r,) in db.query(RegraSegmentacao.id).filter(RegraSegmentacao.cliente_id != cliente.id).all()]
+    if regras_de_outros:
+        db.query(RegraCondicao).filter(RegraCondicao.regra_id.in_(regras_de_outros)).delete(synchronize_session=False)
     n_regras = db.query(RegraSegmentacao).filter(RegraSegmentacao.cliente_id != cliente.id).delete(synchronize_session=False)
+
     n_ident = db.query(ClienteIdentificador).filter(ClienteIdentificador.cliente_id != cliente.id).delete(synchronize_session=False)
 
     ids_importacoes_em_uso = {i for (i,) in db.query(LancamentoVerba.importacao_id).distinct().all()}

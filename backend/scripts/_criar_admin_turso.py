@@ -9,7 +9,7 @@ import sys
 sys.path.insert(0, ".")
 sys.path.insert(0, "scripts")
 
-from _turso_http import criar_client
+from _turso_http import criar_client, encerrar
 from app.core.security import hash_password
 
 if len(sys.argv) != 4:
@@ -31,3 +31,4 @@ else:
     )
     print(f"Admin criado no Turso: {email}")
 client.close()
+encerrar()

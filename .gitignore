@@ -13,4 +13,6 @@ build/
 backend/uploads/
 backend/generated/
 *.db
+# fixture gerado por scripts/_criar_ds_sintetica.py
+backend/_ds_sintetica.xlsx
 .claude/

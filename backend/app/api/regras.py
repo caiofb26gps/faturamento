@@ -5,7 +5,8 @@ from app.core.database import get_db
 from app.core.deps import get_current_user, require_admin
 from app.models.cliente import Cliente
 from app.models.enums import AcaoAuditoria
-from app.models.regra import RegraSegmentacao
+from app.models.mapa import MapaGerado
+from app.models.regra import RegraCondicao, RegraSegmentacao
 from app.models.usuario import Usuario
 from app.schemas.regra import RegraSegmentacaoCreate, RegraSegmentacaoOut, RegraSegmentacaoUpdate
 from app.services.auditoria import registrar
@@ -66,7 +67,13 @@ def criar_regra(
     usuario: Usuario = Depends(require_admin),
 ):
     _cliente_ou_404(db, cliente_id)
-    regra = RegraSegmentacao(cliente_id=cliente_id, **payload.model_dump())
+    dados = payload.model_dump()
+    condicoes = dados.pop("condicoes")
+    regra = RegraSegmentacao(
+        cliente_id=cliente_id,
+        **dados,
+        condicoes=[RegraCondicao(**c) for c in condicoes],
+    )
     db.add(regra)
     db.flush()
     registrar(
@@ -99,8 +106,14 @@ def atualizar_regra(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Regra não encontrada")
 
     dados_antes = RegraSegmentacaoOut.model_validate(regra).model_dump(mode="json")
-    for campo, valor in payload.model_dump().items():
+
+    dados = payload.model_dump()
+    condicoes = dados.pop("condicoes")
+    for campo, valor in dados.items():
         setattr(regra, campo, valor)
+    # Substitui as condições por inteiro em vez de tentar casar uma a uma: o
+    # payload é o estado desejado completo, e delete-orphan limpa as antigas.
+    regra.condicoes = [RegraCondicao(**c) for c in condicoes]
 
     db.flush()
     registrar(
@@ -131,6 +144,22 @@ def remover_regra(
     )
     if regra is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Regra não encontrada")
+
+    # Mapas já gerados apontam para a regra (histórico do que foi enviado). Apagar
+    # a regra quebraria essa referência, então bloqueia com uma mensagem clara em
+    # vez de deixar estourar erro de foreign key.
+    mapas = db.query(MapaGerado).filter(MapaGerado.regra_segmentacao_id == regra_id).all()
+    if mapas:
+        competencias = sorted({m.competencia for m in mapas})
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                f"Esta regra já tem {len(mapas)} mapa(s) gerado(s) "
+                f"(competência: {', '.join(competencias)}). Apague esses mapas antes, "
+                "ou edite a regra em vez de excluí-la."
+            ),
+        )
+
     registrar(
         db,
         entidade="regras_segmentacao",

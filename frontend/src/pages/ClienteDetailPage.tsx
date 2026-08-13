@@ -8,7 +8,6 @@ import {
   Group,
   Modal,
   Paper,
-  Select,
   Stack,
   Switch,
   Table,
@@ -20,6 +19,7 @@ import { useForm } from '@mantine/form'
 import { notifications } from '@mantine/notifications'
 import { api } from '../api/client'
 import { ClienteCamposForm } from '../components/ClienteCamposForm'
+import { CondicoesRegraForm } from '../components/CondicoesRegraForm'
 import { useClienteFormOptions } from '../hooks/useClienteFormOptions'
 import type {
   Cliente,
@@ -27,6 +27,7 @@ import type {
   ForaDasRegras,
   GeracaoMapaResultado,
   MapaGerado,
+  RegraCondicaoInput,
   RegraSegmentacao,
   RegraSegmentacaoInput,
 } from '../api/types'
@@ -53,8 +54,8 @@ const CLIENTE_INPUT_VAZIO: ClienteInput = {
 
 const REGRA_VAZIA: RegraSegmentacaoInput = {
   ordem: 0,
-  atributo_segmentacao: '',
-  valor_segmentacao: '',
+  logica: 'E',
+  condicoes: [{ atributo: '', comparador: 'IGUAL', valor: '' }],
   nome_exibicao: '',
   email_responsavel: '',
   dia_envio: null,
@@ -62,6 +63,18 @@ const REGRA_VAZIA: RegraSegmentacaoInput = {
   analista_id: null,
   aplica_email: true,
   aplica_mapa: true,
+}
+
+const ROTULO_COMPARADOR: Record<RegraCondicaoInput['comparador'], string> = {
+  IGUAL: '=',
+  CONTEM: 'contém',
+  DIFERENTE: '≠',
+}
+
+function descreverRegra(regra: RegraSegmentacao) {
+  return regra.condicoes
+    .map((c) => `${c.atributo} ${ROTULO_COMPARADOR[c.comparador]} ${c.valor}`)
+    .join(regra.logica === 'E' ? '  E  ' : '  OU  ')
 }
 
 export function ClienteDetailPage() {
@@ -72,6 +85,7 @@ export function ClienteDetailPage() {
   const [mapas, setMapas] = useState<MapaGerado[]>([])
   const [foraDasRegras, setForaDasRegras] = useState<ForaDasRegras | null>(null)
   const [modalAberto, setModalAberto] = useState(false)
+  const [regraEditandoId, setRegraEditandoId] = useState<number | null>(null)
   const [drawerEdicaoAberto, setDrawerEdicaoAberto] = useState(false)
   const [competencia, setCompetencia] = useState('')
   const [gerando, setGerando] = useState(false)
@@ -156,19 +170,58 @@ export function ClienteDetailPage() {
   }, [clienteId])
 
   function abrirNovaRegra() {
+    setRegraEditandoId(null)
     form.setValues({ ...REGRA_VAZIA, ordem: regras.length })
     setModalAberto(true)
   }
 
+  function abrirEdicaoRegra(regra: RegraSegmentacao) {
+    setRegraEditandoId(regra.id)
+    form.setValues({
+      ordem: regra.ordem,
+      logica: regra.logica,
+      condicoes: regra.condicoes.map((c) => ({ atributo: c.atributo, comparador: c.comparador, valor: c.valor })),
+      nome_exibicao: regra.nome_exibicao,
+      email_responsavel: regra.email_responsavel,
+      dia_envio: regra.dia_envio,
+      envio_automatico: regra.envio_automatico,
+      analista_id: regra.analista_id,
+      aplica_email: regra.aplica_email,
+      aplica_mapa: regra.aplica_mapa,
+    })
+    setModalAberto(true)
+  }
+
   async function salvarRegra(values: RegraSegmentacaoInput) {
+    const incompletas = values.condicoes.filter((c) => !c.atributo || !c.valor.trim())
+    if (incompletas.length > 0) {
+      notifications.show({ message: 'Toda condição precisa de atributo e valor.', color: 'red' })
+      return
+    }
     try {
-      await api.post(`/clientes/${clienteId}/regras`, values)
-      notifications.show({ message: 'Regra criada.', color: 'green' })
+      if (regraEditandoId) {
+        await api.put(`/clientes/${clienteId}/regras/${regraEditandoId}`, values)
+        notifications.show({ message: 'Regra atualizada.', color: 'green' })
+      } else {
+        await api.post(`/clientes/${clienteId}/regras`, values)
+        notifications.show({ message: 'Regra criada.', color: 'green' })
+      }
       setModalAberto(false)
       form.reset()
       carregar()
     } catch (err: any) {
-      notifications.show({ message: err?.response?.data?.detail ?? 'Erro ao criar regra', color: 'red' })
+      notifications.show({ message: err?.response?.data?.detail ?? 'Erro ao salvar regra', color: 'red' })
+    }
+  }
+
+  async function excluirRegra(regra: RegraSegmentacao) {
+    if (!window.confirm(`Excluir a regra "${regra.nome_exibicao}"?`)) return
+    try {
+      await api.delete(`/clientes/${clienteId}/regras/${regra.id}`)
+      notifications.show({ message: 'Regra excluída.', color: 'green' })
+      carregar()
+    } catch (err: any) {
+      notifications.show({ message: err?.response?.data?.detail ?? 'Erro ao excluir regra', color: 'red' })
     }
   }
 
@@ -249,38 +302,66 @@ export function ClienteDetailPage() {
       <Table striped withTableBorder>
         <Table.Thead>
           <Table.Tr>
-            <Table.Th />
-            <Table.Th>Se atributo</Table.Th>
-            <Table.Th>For igual a</Table.Th>
+            <Table.Th w={80}>Ordem</Table.Th>
+            <Table.Th>Condição</Table.Th>
             <Table.Th>Exibição</Table.Th>
             <Table.Th>E-mail responsável</Table.Th>
             <Table.Th>Dia envio</Table.Th>
             <Table.Th>Automático</Table.Th>
+            {usuario?.papel === 'ADMIN' && <Table.Th w={110} />}
           </Table.Tr>
         </Table.Thead>
         <Table.Tbody>
           {regras.map((r, i) => (
             <Table.Tr key={r.id}>
               <Table.Td>
-                {usuario?.papel === 'ADMIN' && (
-                  <Group gap={2}>
-                    <Button size="compact-xs" variant="subtle" disabled={i === 0} onClick={() => mover(r, -1)}>
-                      ↑
-                    </Button>
-                    <Button size="compact-xs" variant="subtle" disabled={i === regras.length - 1} onClick={() => mover(r, 1)}>
-                      ↓
-                    </Button>
-                  </Group>
-                )}
+                <Group gap={2} wrap="nowrap">
+                  <Text size="xs" c="dimmed">
+                    {i + 1}
+                  </Text>
+                  {usuario?.papel === 'ADMIN' && (
+                    <>
+                      <Button size="compact-xs" variant="subtle" disabled={i === 0} onClick={() => mover(r, -1)}>
+                        ↑
+                      </Button>
+                      <Button
+                        size="compact-xs"
+                        variant="subtle"
+                        disabled={i === regras.length - 1}
+                        onClick={() => mover(r, 1)}
+                      >
+                        ↓
+                      </Button>
+                    </>
+                  )}
+                </Group>
               </Table.Td>
               <Table.Td>
-                <Badge variant="light">{r.atributo_segmentacao}</Badge>
+                <Group gap={4} wrap="wrap">
+                  {r.condicoes.length > 1 && (
+                    <Badge size="sm" color={r.logica === 'E' ? 'blue' : 'grape'}>
+                      {r.logica}
+                    </Badge>
+                  )}
+                  <Text size="sm">{descreverRegra(r)}</Text>
+                </Group>
               </Table.Td>
-              <Table.Td>{r.valor_segmentacao}</Table.Td>
               <Table.Td>{r.nome_exibicao}</Table.Td>
               <Table.Td>{r.email_responsavel}</Table.Td>
               <Table.Td>{r.dia_envio ?? '—'}</Table.Td>
               <Table.Td>{r.envio_automatico ? 'Sim' : 'Não'}</Table.Td>
+              {usuario?.papel === 'ADMIN' && (
+                <Table.Td>
+                  <Group gap={4} wrap="nowrap">
+                    <Button size="compact-xs" variant="light" onClick={() => abrirEdicaoRegra(r)}>
+                      Editar
+                    </Button>
+                    <Button size="compact-xs" variant="subtle" color="red" onClick={() => excluirRegra(r)}>
+                      Excluir
+                    </Button>
+                  </Group>
+                </Table.Td>
+              )}
             </Table.Tr>
           ))}
         </Table.Tbody>
@@ -360,33 +441,32 @@ export function ClienteDetailPage() {
         </Text>
       )}
 
-      <Modal opened={modalAberto} onClose={() => setModalAberto(false)} title="Nova regra de segmentação">
+      <Modal
+        opened={modalAberto}
+        onClose={() => setModalAberto(false)}
+        title={regraEditandoId ? 'Editar regra de segmentação' : 'Nova regra de segmentação'}
+        size="lg"
+      >
         <form onSubmit={form.onSubmit(salvarRegra)}>
           <Stack>
-            <Select
-              label="Se o atributo"
-              description="Qual dado do colaborador essa regra testa"
-              data={opcoes.atributosSegmentacao}
-              required
-              {...form.getInputProps('atributo_segmentacao')}
+            <CondicoesRegraForm
+              logica={form.values.logica}
+              condicoes={form.values.condicoes}
+              atributos={opcoes.atributosSegmentacao}
+              onLogicaChange={(l) => form.setFieldValue('logica', l)}
+              onCondicoesChange={(c) => form.setFieldValue('condicoes', c)}
             />
-            <TextInput
-              label="For igual a"
-              description="Ex: um CNPJ, um cargo, o nome do colaborador — conforme o atributo escolhido"
-              required
-              {...form.getInputProps('valor_segmentacao')}
-            />
+
             <TextInput label="Nome de exibição no mapa" required {...form.getInputProps('nome_exibicao')} />
             <TextInput label="E-mail responsável" required {...form.getInputProps('email_responsavel')} />
-            <TextInput
-              label="Dia de envio"
-              type="number"
-              {...form.getInputProps('dia_envio')}
-            />
+            <TextInput label="Dia de envio" type="number" {...form.getInputProps('dia_envio')} />
             <Switch label="Envio automático" {...form.getInputProps('envio_automatico', { type: 'checkbox' })} />
-            <Text size="xs" c="dimmed">
-              Vai entrar no fim da fila de prioridade (posição {form.values.ordem + 1}) — reordene depois com as flechinhas se precisar testar antes de outra regra.
-            </Text>
+            {!regraEditandoId && (
+              <Text size="xs" c="dimmed">
+                Vai entrar no fim da fila de prioridade (posição {form.values.ordem + 1}) — reordene depois com as
+                flechinhas se precisar testar antes de outra regra.
+              </Text>
+            )}
             <Button type="submit">Salvar</Button>
           </Stack>
         </form>

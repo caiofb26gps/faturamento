@@ -7,6 +7,7 @@ import { ClientesPage } from './pages/ClientesPage'
 import { ClienteDetailPage } from './pages/ClienteDetailPage'
 import { DeParaPage } from './pages/DeParaPage'
 import { DeParaDetailPage } from './pages/DeParaDetailPage'
+import { ImportacoesPage } from './pages/ImportacoesPage'
 
 function App() {
   return (
@@ -49,6 +50,16 @@ function App() {
             <ProtectedRoute>
               <AppLayout>
                 <DeParaDetailPage />
+              </AppLayout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/importacoes"
+          element={
+            <ProtectedRoute>
+              <AppLayout>
+                <ImportacoesPage />
               </AppLayout>
             </ProtectedRoute>
           }

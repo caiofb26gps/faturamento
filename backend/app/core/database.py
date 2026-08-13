@@ -1,4 +1,5 @@
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, event
+from sqlalchemy.engine import Engine
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
 
 from app.core.config import get_settings
@@ -21,6 +22,25 @@ def _criar_engine():
 
 
 engine = _criar_engine()
+
+
+@event.listens_for(Engine, "connect")
+def _ativar_foreign_keys(dbapi_connection, connection_record):
+    """SQLite não valida foreign key por padrão; o Turso valida.
+
+    Sem isso o dev local aceita silenciosamente lixo que a produção rejeita —
+    e pior: um DELETE em massa deixa filhos órfãos que depois "grudam" numa
+    linha nova que reusa o mesmo id (aconteceu aqui: condições de uma regra
+    apagada reapareceram numa regra nova, mudando o que ela testava).
+    """
+    if not hasattr(dbapi_connection, "execute"):
+        return
+    try:
+        dbapi_connection.execute("PRAGMA foreign_keys=ON")
+    except Exception:  # noqa: BLE001 - não é SQLite (ou não suporta): segue sem o pragma
+        pass
+
+
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
 
 

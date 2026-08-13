@@ -7,7 +7,7 @@ from app.models.importacao import Importacao
 from app.models.lancamento import LancamentoVerba
 from app.models.mapa import MapaGerado
 from app.models.negocio_mapeamento import NegocioDsMapeamento
-from app.models.regra import RegraSegmentacao
+from app.models.regra import RegraCondicao, RegraSegmentacao
 from app.models.usuario import Usuario
 
 __all__ = [
@@ -23,6 +23,7 @@ __all__ = [
     "LancamentoVerba",
     "MapaGerado",
     "NegocioDsMapeamento",
+    "RegraCondicao",
     "RegraSegmentacao",
     "Usuario",
 ]

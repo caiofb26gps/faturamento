@@ -15,7 +15,7 @@ sys.path.insert(0, "scripts")
 from sqlalchemy.dialects import sqlite
 from sqlalchemy.schema import CreateTable
 
-from _turso_http import criar_client
+from _turso_http import criar_client, encerrar
 from app.core.database import Base
 from app.models import *  # noqa: F401,F403
 
@@ -33,3 +33,4 @@ for table in Base.metadata.sorted_tables:
 
 print(f"\n{len(Base.metadata.sorted_tables)} tabela(s) garantida(s) no Turso.")
 client.close()
+encerrar()

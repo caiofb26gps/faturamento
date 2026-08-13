@@ -8,6 +8,7 @@ app cair no SQLite) e cai nas TURSO_DATABASE_URL/AUTH_TOKEN quando rodando em
 um ambiente que já aponta pro Turso de verdade.
 """
 
+import os
 import sys
 
 import libsql_client
@@ -27,3 +28,16 @@ def criar_client():
         sys.exit(1)
     host = url.removeprefix("libsql://")
     return libsql_client.create_client_sync(url=f"https://{host}", auth_token=token)
+
+
+def encerrar(codigo: int = 0):
+    """Encerra o processo na força.
+
+    O `create_client_sync` do libsql_client sobe um event loop em uma thread que
+    não é daemon e continua viva mesmo depois de `client.close()` — sem isso o
+    script fica pendurado pra sempre depois de terminar o trabalho, segurando
+    também qualquer arquivo aberto (já travou o dev.db aqui).
+    """
+    sys.stdout.flush()
+    sys.stderr.flush()
+    os._exit(codigo)

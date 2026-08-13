@@ -59,12 +59,28 @@ export interface ClienteInput {
   portal_senha?: string | null
 }
 
+export type LogicaRegra = 'E' | 'OU'
+export type ComparadorCondicao = 'IGUAL' | 'CONTEM' | 'DIFERENTE'
+
+export interface RegraCondicao {
+  id: number
+  atributo: string
+  comparador: ComparadorCondicao
+  valor: string
+}
+
+export interface RegraCondicaoInput {
+  atributo: string
+  comparador: ComparadorCondicao
+  valor: string
+}
+
 export interface RegraSegmentacao {
   id: number
   cliente_id: number
   ordem: number
-  atributo_segmentacao: string
-  valor_segmentacao: string
+  logica: LogicaRegra
+  condicoes: RegraCondicao[]
   nome_exibicao: string
   email_responsavel: string
   dia_envio: number | null
@@ -76,8 +92,8 @@ export interface RegraSegmentacao {
 
 export interface RegraSegmentacaoInput {
   ordem: number
-  atributo_segmentacao: string
-  valor_segmentacao: string
+  logica: LogicaRegra
+  condicoes: RegraCondicaoInput[]
   nome_exibicao: string
   email_responsavel: string
   dia_envio: number | null
@@ -105,6 +121,26 @@ export interface MapaGerado {
   valores_finais: Record<string, string> | null
   diferenca: Record<string, string> | null
   alertas: { verbas_fora_de_para: string[] } | null
+}
+
+export type TipoImportacao = 'CLOSED_INICIAL' | 'AJUSTE'
+export type StatusImportacao = 'PROCESSANDO' | 'CONCLUIDA' | 'ERRO'
+
+export interface Importacao {
+  id: number
+  competencia: string
+  tipo: TipoImportacao
+  status: StatusImportacao
+  cliente_id: number | null
+  regra_segmentacao_id: number | null
+  mensagem_erro: string | null
+  resumo: {
+    total_linhas?: number
+    linhas_resolvidas?: number
+    linhas_nao_resolvidas?: number
+    principais_nao_resolvidos?: { negocio_ds: string; cod_grupo: string; grupo_cliente: string; linhas: number }[]
+  } | null
+  criado_em: string
 }
 
 export interface ForaDasRegras {

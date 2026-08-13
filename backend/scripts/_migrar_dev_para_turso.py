@@ -16,7 +16,7 @@ import sys
 sys.path.insert(0, ".")
 sys.path.insert(0, "scripts")
 
-from _turso_http import criar_client
+from _turso_http import criar_client, encerrar
 
 # Ordem importa: pai antes de filho, por causa das foreign keys.
 TABELAS = [
@@ -29,6 +29,7 @@ TABELAS = [
     "clientes",
     "cliente_identificadores",
     "regras_segmentacao",
+    "regra_condicoes",
 ]
 
 LOTE = 200  # linhas por batch; de_para_verbas tem ~420 e o Turso limita payload
@@ -65,3 +66,4 @@ for tabela in TABELAS:
 local.close()
 client.close()
 print("\nMigração de cadastros concluída.")
+encerrar()

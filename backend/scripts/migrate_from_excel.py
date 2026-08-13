@@ -42,8 +42,8 @@ from app.core.security import hash_password
 from app.models.atributo import AtributoSegmentacao
 from app.models.cliente import Cliente
 from app.models.de_para import CampoCadastralMapa, DeParaModelo, DeParaVerba
-from app.models.enums import PapelUsuario, StatusCliente, StatusFolha
-from app.models.regra import RegraSegmentacao
+from app.models.enums import ComparadorCondicao, LogicaRegra, PapelUsuario, StatusCliente, StatusFolha
+from app.models.regra import RegraCondicao, RegraSegmentacao
 from app.models.usuario import Usuario
 
 
@@ -346,18 +346,24 @@ def carregar_regras(
         db.add(
             RegraSegmentacao(
                 cliente_id=cliente_id,
-                # A planilha não tinha um atributo por regra — era um único tipo por
-                # cliente (coluna "Segmentação Mapa" da aba MAPAS). Preserva esse
-                # comportamento na migração; o atributo pode ser ajustado regra a
-                # regra depois, agora que cada uma pode testar algo diferente.
                 ordem=ordem,
-                atributo_segmentacao=segmentacao_mapa_legada.get(cliente_id, "GERAL"),
-                valor_segmentacao=s(valor) or "",
+                logica=LogicaRegra.E,
                 nome_exibicao=s(nome_exibicao) or "",
                 email_responsavel=s(email_responsavel) or "",
                 dia_envio=para_int(data_envio),
                 envio_automatico=eh_sim(envio_automatico),
                 analista_id=usuarios.get((s(analista_email) or "").lower()) if s(analista_email) else None,
+                # A planilha só tinha um valor por regra, e o atributo era um único
+                # por cliente (coluna "Segmentação Mapa" da aba MAPAS) — então cada
+                # regra migra com uma condição só, "atributo IGUAL valor". Condições
+                # extras (E/OU) são cadastradas depois pela tela.
+                condicoes=[
+                    RegraCondicao(
+                        atributo=segmentacao_mapa_legada.get(cliente_id, "GERAL"),
+                        comparador=ComparadorCondicao.IGUAL,
+                        valor=s(valor) or "",
+                    )
+                ],
             )
         )
         total += 1
