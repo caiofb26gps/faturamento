@@ -2,7 +2,9 @@ fastapi==0.115.0
 uvicorn[standard]==0.30.6
 sqlalchemy==2.0.35
 alembic==1.13.2
-psycopg[binary]==3.2.1
+# Sem wheel pronta pra Windows (compila Rust) — só é de fato importada quando
+# TURSO_DATABASE_URL/TURSO_AUTH_TOKEN estão setados (produção/Render, Linux).
+sqlalchemy-libsql==0.2.0
 pydantic==2.9.2
 pydantic-settings==2.5.2
 email-validator==2.2.0

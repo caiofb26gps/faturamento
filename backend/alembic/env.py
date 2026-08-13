@@ -1,13 +1,15 @@
 from logging.config import fileConfig
 
 from alembic import context
-from sqlalchemy import engine_from_config, pool
 
 from app.core.config import get_settings
-from app.core.database import Base
+from app.core.database import Base, engine
 from app.models import *  # noqa: F401,F403 -- garante que todos os modelos sejam registrados
 
 config = context.config
+# Só usado pelo modo offline (--sql); o online usa a `engine` já construída em
+# app.core.database, que sabe montar a conexão do Turso quando configurado —
+# reconstruir isso aqui via engine_from_config perderia o connect_args do libsql.
 config.set_main_option("sqlalchemy.url", get_settings().database_url)
 
 if config.config_file_name is not None:
@@ -24,8 +26,7 @@ def run_migrations_offline() -> None:
 
 
 def run_migrations_online() -> None:
-    connectable = engine_from_config(config.get_section(config.config_ini_section, {}), prefix="sqlalchemy.", poolclass=pool.NullPool)
-    with connectable.connect() as connection:
+    with engine.connect() as connection:
         context.configure(connection=connection, target_metadata=target_metadata)
         with context.begin_transaction():
             context.run_migrations()

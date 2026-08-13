@@ -7,9 +7,9 @@ app = FastAPI(title="Mapa de Faturamento", version="0.1.0")
 
 app.add_middleware(
     CORSMiddleware,
-    # regex (não uma lista fixa) porque em dev o Vite muda de porta quando a
-    # padrão (5173) já está em uso por outra sessão.
-    allow_origin_regex=r"http://localhost:\d+",
+    # regex (não lista fixa) porque em dev o Vite muda de porta quando a padrão
+    # (5173) já está em uso, e em produção o front do Render é *.onrender.com.
+    allow_origin_regex=r"http://localhost:\d+|https://faturamento-frontend[\w-]*\.onrender\.com",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
