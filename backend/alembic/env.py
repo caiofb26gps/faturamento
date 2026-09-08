@@ -7,9 +7,8 @@ from app.core.database import Base, engine
 from app.models import *  # noqa: F401,F403 -- garante que todos os modelos sejam registrados
 
 config = context.config
-# Só usado pelo modo offline (--sql); o online usa a `engine` já construída em
-# app.core.database, que sabe montar a conexão do Turso quando configurado —
-# reconstruir isso aqui via engine_from_config perderia o connect_args do libsql.
+# Só usado pelo modo offline (--sql); o online reusa a `engine` de
+# app.core.database para não duplicar a configuração de conexão.
 config.set_main_option("sqlalchemy.url", get_settings().database_url)
 
 if config.config_file_name is not None:

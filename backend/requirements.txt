@@ -1,15 +1,16 @@
-fastapi==0.115.0
-uvicorn[standard]==0.30.6
-sqlalchemy==2.0.35
-alembic==1.13.2
-# Sem wheel pronta pra Windows (compila Rust) — só é de fato importada quando
-# TURSO_DATABASE_URL/TURSO_AUTH_TOKEN estão setados (produção/Render, Linux).
-sqlalchemy-libsql==0.2.0
-pydantic==2.9.2
-pydantic-settings==2.5.2
+# Versões alinhadas com o ambiente local onde tudo foi testado — antes os pins
+# eram mais antigos que o instalado aqui, ou seja: produção rodaria bibliotecas
+# diferentes das que eu validei.
+fastapi==0.141.1
+uvicorn[standard]==0.52.1
+sqlalchemy==2.0.51
+alembic==1.19.0
+psycopg[binary]==3.3.4
+pydantic==2.13.4
+pydantic-settings==2.14.2
 email-validator==2.2.0
-python-jose[cryptography]==3.3.0
-bcrypt==4.2.0
-cryptography==43.0.1
-python-multipart==0.0.9
+python-jose[cryptography]==3.5.0
+bcrypt==5.0.0
+cryptography==50.0.0
+python-multipart==0.0.32
 openpyxl==3.1.5

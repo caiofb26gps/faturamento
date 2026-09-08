@@ -15,6 +15,8 @@ from app.services.ingestao import criar_importacao, processar_importacao
 
 router = APIRouter(prefix="/importacoes", tags=["importacoes"])
 
+TAMANHO_PEDACO_UPLOAD = 1024 * 1024  # 1 MB
+
 
 def _rodar_processamento_em_background(importacao_id: int) -> None:
     # Precisa de uma sessão própria: a sessão da requisição (Depends(get_db)) já foi
@@ -47,8 +49,11 @@ async def enviar_importacao(
     os.makedirs(settings.upload_dir, exist_ok=True)
     nome_arquivo = f"{uuid.uuid4().hex}_{arquivo.filename}"
     caminho = os.path.join(settings.upload_dir, nome_arquivo)
+    # Em pedaços, não `await arquivo.read()`: a DS real tem dezenas de MB e ler
+    # tudo de uma vez carrega o arquivo inteiro na memória do container.
     with open(caminho, "wb") as destino:
-        destino.write(await arquivo.read())
+        while pedaco := await arquivo.read(TAMANHO_PEDACO_UPLOAD):
+            destino.write(pedaco)
 
     importacao = criar_importacao(
         db,
